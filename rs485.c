@@ -4,11 +4,11 @@
 #include <avr/interrupt.h>
 #include <string.h>
 
-#define BAUD 4800
+#define BAUD 57600
 #define USE_U2X 1
 #define UBRR_CALC(baud,f_osc,u2x) (((uint32_t)(f_osc)/(8*(2-(u2x))*(uint32_t)(baud)))-1)
 #define BACKLIGHT PC0
-#define LED1 PD5
+#define LED1 PD7
 
 /* inquiry:
      <SOH> <addr> <payload> <EOT>
@@ -66,7 +66,7 @@ enum rs485_rx_state {
 
 /* driver enable / receiver not-enable connected to port PD2 */
 #define PORT_DEnRE  PORTD
-#define BIT_DEnRE   _BV(2)
+#define BIT_DEnRE   (1<<PD2)
 #define DDR_DEnRE   DDRD
 
 unsigned char rs485_rxbuf[RS485_MAX_MSGSIZE];
@@ -82,8 +82,9 @@ ISR(USART_RX_vect)
 	unsigned char p = rs485_rxbufp;
 	unsigned char c;
 
+	PORTD ^= (1<<LED1);
 	c = UDR0;
-	PORTC ^= (1<<BACKLIGHT);
+
 	switch (c) {
 	case ASCII_SOH:
 		/* state != RS485_RX_IDLE error, ignored */
@@ -168,6 +169,7 @@ rs485_rxok() {
 	p = rs485_rxbufp;
 	if (p & RS485_RXBUFP_BUSY)
 		rs485_rxbufp = 0;
+	PORTD &= ~(1<<LED1);	
 	sei();
 }
 
@@ -186,10 +188,12 @@ static unsigned char rs485_txbufp;
 
 /* transmit complete */
 ISR(USART_TX_vect)
-{
+{	
 	enum rs485_tx_state state = rs485_tx_state;
 	if (state == RS485_TX_END)
 		PORT_DEnRE &= ~BIT_DEnRE;     /* disable RS485 TX */
+		
+	PORTC &= ~(1<<BACKLIGHT);	
 }
 
 /* data register empty */
@@ -199,7 +203,7 @@ ISR(USART_UDRE_vect)
 	unsigned char l = rs485_txbuflen;
 	unsigned char p = rs485_txbufp;
 	unsigned char c = 0xba;
-
+	PORTC ^= (1<<BACKLIGHT);
 	switch (state) {
 	case RS485_TX_STX:
 		PORT_DEnRE |= BIT_DEnRE;
@@ -238,6 +242,7 @@ ISR(USART_UDRE_vect)
 	}
 write_udr:
 	UDR0 = c;
+
 no_write_udr:
 	rs485_tx_state = state;
 	rs485_txbufp = p;
@@ -259,6 +264,7 @@ rs485_init()
 {
 	uint16_t ubrr = UBRR_CALC(BAUD,F_CPU,USE_U2X);
  	DDRC |= (1<<BACKLIGHT);
+ 	DDRD |= (1<<LED1);
 	/* PD0 = RxD, PD1 = TxD */
 	DDRD  &= ~_BV(0);  /* PD0 = input */
 	PORTD |=  _BV(0);  /* weak pullup on RxD */
