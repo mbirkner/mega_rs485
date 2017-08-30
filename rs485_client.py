@@ -209,7 +209,7 @@ def main() :
             if ack_node != args.node or ack_cmd != b'E'[0] :
                 print('Invlid answer received:', msg, ack_node, ack_cmd)
                 continue;
-            print('Node %d servo position:'%(args.node))
+            print('Node %d stepper position:'%(args.node))
             print('  Position: %d'%pos)
             print('  Target:   %d'%target)
             break

@@ -6,7 +6,7 @@
 #include <avr/cpufunc.h>
 #include <avr/interrupt.h>
 #include <string.h>
-
+#include <util/delay.h>
 /*
  *                      +----u----+
  *            \Reset .. | 1    20 | -- Vcc
@@ -108,13 +108,15 @@ main()
 
 	tiny485_syscfg_init();
 	rs485_init();
-	//servo_pwm_init();
-	//stepper_init();
+//	servo_pwm_init();
+
+	stepper_init();
 
 	sei(); /* enable interrupts */
 
 	/* main message handler loop */
-	while(1) {
+	
+	while(0) {
 		msglen = rs485_poll();
 		if (msglen == RS485_POLL_NOMSG)
 			continue;
@@ -197,7 +199,7 @@ main()
 			if (msglen != 2)
 				goto invalidcmd;
 			v = (rs485_rxbuf[2] << 8)|rs485_rxbuf[1]; /* little end. */
-			stepper_zero(v);
+			stepper_zero();
 			rs485_start_tx(2); /* default ack reply */
 			goto rxok;
 		}
@@ -210,10 +212,10 @@ main()
 
 		if (msgid == CMD_STEPPER_GET) {
 			cli();
-			rs485_txbuf[2] =  stepper_pos & 0xff;
-			rs485_txbuf[3] = (stepper_pos >> 8) & 0xff;
-			rs485_txbuf[4] =  stepper_target & 0xff;
-			rs485_txbuf[5] = (stepper_target >> 8) & 0xff;
+			rs485_txbuf[2] =  currentStep & 0xff;
+			rs485_txbuf[3] = 0;
+			rs485_txbuf[4] =  targetStep & 0xff;
+			rs485_txbuf[5] = 0;//(stepper_target >> 8) & 0xff;
 			sei();
 			rs485_start_tx(6);
 			goto rxok;
@@ -226,5 +228,27 @@ invalidcmd:
 		rs485_start_tx(3);
 rxok:
 		rs485_rxok();
-	}
+		
+
+		stepper_update();
+
+
+	} //while(1)
+	
+	long at = MAX_STEPS/2;
+	int dist = 220;
+	int ddir = 1;
+	while(1){
+		stepper_update();
+		
+	if(stopped) {
+		_delay_ms(1000);	
+		if (at<=dist) ddir=1; //move forward when too close to 0
+		if (at>= MAX_STEPS-dist) ddir =-1;//move backward when close to full scale
+		at+=(ddir>0)?dist:-dist; //new target
+		stepper_goto(at);
+		}
+		
+	}	
+
 }
